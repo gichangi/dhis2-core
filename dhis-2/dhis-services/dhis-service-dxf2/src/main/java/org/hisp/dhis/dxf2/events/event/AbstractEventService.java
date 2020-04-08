@@ -1840,7 +1840,8 @@ public abstract class AbstractEventService
         Date eventDate = executionDate != null ? executionDate : dueDate;
 
         // TODO: luciano question -> here we throw an exception, rather than using ImportSummary, why?
-        validateAttributeOptionComboDate( aoc, eventDate );
+        // FIXME: luciano to-rule -> AttributeOptionComboDateCheck
+        //validateAttributeOptionComboDate( aoc, eventDate );
 
         // FIXME: luciano to-rule -> AttributeOptionComboAclCheck
         errors = trackerAccessManager.canWrite( importOptions.getUser(), aoc );
