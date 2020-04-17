@@ -35,20 +35,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.hisp.dhis.category.CategoryOptionCombo;
-import org.hisp.dhis.common.AssignedUserSelectionMode;
 import org.hisp.dhis.common.Grid;
-import org.hisp.dhis.common.IdSchemes;
-import org.hisp.dhis.common.OrganisationUnitSelectionMode;
 import org.hisp.dhis.dxf2.common.ImportOptions;
 import org.hisp.dhis.dxf2.events.event.validation.WorkContext;
 import org.hisp.dhis.dxf2.events.report.EventRows;
 import org.hisp.dhis.dxf2.importsummary.ImportSummaries;
 import org.hisp.dhis.dxf2.importsummary.ImportSummary;
-import org.hisp.dhis.event.EventStatus;
 import org.hisp.dhis.program.ProgramStageInstance;
-import org.hisp.dhis.program.ProgramStatus;
-import org.hisp.dhis.query.Order;
 import org.hisp.dhis.scheduling.JobConfiguration;
 
 /**
@@ -63,14 +56,6 @@ public interface EventService
     Events getEvents( EventSearchParams params );
 
     EventRows getEventRows( EventSearchParams params );
-
-    EventSearchParams getFromUrl( String program, String programStage, ProgramStatus programStatus, Boolean followUp,
-        String orgUnit, OrganisationUnitSelectionMode orgUnitSelectionMode, String trackedEntityInstance,
-        Date startDate, Date endDate, Date dueDateStart, Date dueDateEnd, Date lastUpdatedStartDate,
-        Date lastUpdatedEndDate, String lastUpdatedDuration, EventStatus status, CategoryOptionCombo attributeCoc,
-        IdSchemes idSchemes, Integer page, Integer pageSize, boolean totalPages, boolean skipPaging, List<Order> orders,
-        List<String> gridOrders, boolean includeAttributes, Set<String> events, Boolean skipEventId, AssignedUserSelectionMode assignedUserMode,
-        Set<String> assignedUserIds, Set<String> filters, Set<String> dataElements, boolean includeAllDataElements, boolean includeDeleted );
 
     Event getEvent( ProgramStageInstance programStageInstance );
 

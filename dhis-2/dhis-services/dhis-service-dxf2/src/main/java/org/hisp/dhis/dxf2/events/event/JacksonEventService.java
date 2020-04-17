@@ -34,7 +34,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.hibernate.SessionFactory;
 import org.hisp.dhis.category.CategoryService;
 import org.hisp.dhis.common.IdentifiableObjectManager;
-import org.hisp.dhis.dataelement.DataElementService;
 import org.hisp.dhis.dbms.DbmsManager;
 import org.hisp.dhis.dxf2.common.ImportOptions;
 import org.hisp.dhis.dxf2.events.event.validation.WorkContext;
@@ -52,7 +51,6 @@ import org.hisp.dhis.programrule.ProgramRuleVariableService;
 import org.hisp.dhis.query.QueryService;
 import org.hisp.dhis.scheduling.JobConfiguration;
 import org.hisp.dhis.schema.SchemaService;
-import org.hisp.dhis.security.acl.AclService;
 import org.hisp.dhis.system.notification.Notifier;
 import org.hisp.dhis.trackedentity.TrackedEntityInstanceService;
 import org.hisp.dhis.trackedentity.TrackerAccessManager;
@@ -95,7 +93,6 @@ public class JacksonEventService extends AbstractEventService
         ProgramInstanceService programInstanceService,
         ProgramStageInstanceService programStageInstanceService,
         OrganisationUnitService organisationUnitService,
-        DataElementService dataElementService,
         CurrentUserService currentUserService,
         EventDataValueService eventDataValueService,
         TrackedEntityInstanceService entityInstanceService,
@@ -111,7 +108,6 @@ public class JacksonEventService extends AbstractEventService
         QueryService queryService,
         TrackerAccessManager trackerAccessManager,
         TrackerOwnershipManager trackerOwnershipAccessManager,
-        AclService aclService,
         ApplicationEventPublisher eventPublisher,
         RelationshipService relationshipService,
         UserService userService,
@@ -125,7 +121,6 @@ public class JacksonEventService extends AbstractEventService
         checkNotNull( programInstanceService );
         checkNotNull( programStageInstanceService );
         checkNotNull( organisationUnitService );
-        checkNotNull( dataElementService );
         checkNotNull( currentUserService );
         checkNotNull( eventDataValueService );
         checkNotNull( entityInstanceService );
@@ -141,7 +136,6 @@ public class JacksonEventService extends AbstractEventService
         checkNotNull( queryService );
         checkNotNull( trackerAccessManager );
         checkNotNull( trackerOwnershipAccessManager );
-        checkNotNull( aclService );
         checkNotNull( eventPublisher );
         checkNotNull( userService );
         checkNotNull( eventSyncService );
@@ -154,7 +148,6 @@ public class JacksonEventService extends AbstractEventService
         this.programInstanceService = programInstanceService;
         this.programStageInstanceService = programStageInstanceService;
         this.organisationUnitService = organisationUnitService;
-        this.dataElementService = dataElementService;
         this.currentUserService = currentUserService;
         this.eventDataValueService = eventDataValueService;
         this.entityInstanceService = entityInstanceService;
@@ -170,7 +163,6 @@ public class JacksonEventService extends AbstractEventService
         this.queryService = queryService;
         this.trackerAccessManager = trackerAccessManager;
         this.trackerOwnershipAccessManager = trackerOwnershipAccessManager;
-        this.aclService = aclService;
         this.eventPublisher = eventPublisher;
         this.relationshipService = relationshipService;
         this.userService = userService;
@@ -209,7 +201,7 @@ public class JacksonEventService extends AbstractEventService
     }
 
     @Override
-    public ImportSummaries addEvents(List<Event> events, ImportOptions importOptions, WorkContext validationContext) {
+    public ImportSummaries addEvents(List<Event> events, ImportOptions importOptions, WorkContext workContext) {
         return null;
     }
 

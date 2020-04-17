@@ -69,9 +69,9 @@ public class DefaultEventPersistenceService
     private final EventDataValueService eventDataValueService;
 
     private final ProgramStageInstanceStore programStageInstanceStore;
-    
+
     private final IdentifiableObjectManager identifiableObjectManager;
-    
+
     private final TrackedEntityCommentService trackedEntityCommentService;
 
     public DefaultEventPersistenceService( JdbcEventStore jdbcEventStore, EventDataValueService eventDataValueService,
@@ -92,7 +92,7 @@ public class DefaultEventPersistenceService
     }
 
     @Override
-    public List<ProgramStageInstance> save(WorkContext context, List<Event> events )
+    public List<ProgramStageInstance> save( WorkContext context, List<Event> events )
     {
         List<ProgramStageInstance> programStageInstances = convertToProgramStageInstances(
             new ProgramStageInstanceMapper( context ), events );
@@ -122,7 +122,7 @@ public class DefaultEventPersistenceService
     }
 
     @Override
-    public List<ProgramStageInstance> update(final WorkContext context, final List<Event> events )
+    public List<ProgramStageInstance> update( final WorkContext context, final List<Event> events )
     {
         if ( isNotEmpty( events ) )
         {
