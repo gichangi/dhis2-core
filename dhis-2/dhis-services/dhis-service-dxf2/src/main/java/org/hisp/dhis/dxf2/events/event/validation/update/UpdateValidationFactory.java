@@ -1,4 +1,4 @@
-package org.hisp.dhis.dxf2.events.event.validation;
+package org.hisp.dhis.dxf2.events.event.validation.update;
 
 /*
  * Copyright (c) 2004-2020, University of Oslo
@@ -36,46 +36,47 @@ import java.util.Map;
 
 import org.hisp.dhis.dxf2.common.ImportOptions;
 import org.hisp.dhis.dxf2.events.event.Event;
+import org.hisp.dhis.dxf2.events.event.validation.ImmutableEvent;
+import org.hisp.dhis.dxf2.events.event.validation.ValidationCheck;
+import org.hisp.dhis.dxf2.events.event.validation.ValidationContextLoader;
+import org.hisp.dhis.dxf2.events.event.validation.WorkContext;
 import org.hisp.dhis.dxf2.importsummary.ImportStatus;
 import org.hisp.dhis.dxf2.importsummary.ImportSummary;
 import org.hisp.dhis.importexport.ImportStrategy;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * @author Luciano Fiandesio
- */
-@Component( "trackerEventsValidationFactory" )
+@Component( "trackerEventsUpdateValidationFactory" )
 @Slf4j
-public class ValidationFactory
+public class UpdateValidationFactory
 {
     private final ValidationContextLoader validationContextLoader;
 
-    private final Map<ImportStrategy, List<Class<? extends ValidationCheck>>> validatorMap;
+    private final Map<ImportStrategy, List<Class<? extends ValidationCheck>>> eventUpdateValidatorMap;
 
-    public ValidationFactory( ValidationContextLoader validationContextLoader,
-        @Qualifier( "eventValidatorMap" ) Map<ImportStrategy, List<Class<? extends ValidationCheck>>> validatorMap )
+    public UpdateValidationFactory( final ValidationContextLoader validationContextLoader,
+        final Map<ImportStrategy, List<Class<? extends ValidationCheck>>> eventUpdateValidatorMap )
     {
         checkNotNull( validationContextLoader );
         this.validationContextLoader = validationContextLoader;
-        this.validatorMap = validatorMap;
+        this.eventUpdateValidatorMap = eventUpdateValidatorMap;
     }
 
-    public List<ImportSummary> validateEvents( WorkContext ctx, List<Event> events )
+    public List<ImportSummary> validateEvents( final WorkContext ctx, final List<Event> events )
     {
-        List<ImportSummary> importSummaries = new ArrayList<>();
-        ValidationRunner validationRunner = new ValidationRunner(
-            validatorMap.get( ctx.getImportOptions().getImportStrategy() ) );
-        for ( Event event : events )
+        final List<ImportSummary> importSummaries = new ArrayList<>();
+        final ValidationRunner validationRunner = new ValidationRunner(
+            eventUpdateValidatorMap.get( ctx.getImportOptions().getImportStrategy() ) );
+
+        for ( final Event event : events )
         {
             importSummaries.add( validationRunner.executeValidationChain( event, ctx ) );
         }
         return importSummaries;
     }
 
-    public WorkContext getContext( ImportOptions importOptions, List<Event> events )
+    public WorkContext getContext( final ImportOptions importOptions, final List<Event> events )
     {
         return this.validationContextLoader.load( importOptions, events );
     }
@@ -89,14 +90,14 @@ public class ValidationFactory
             this.validators = validators;
         }
 
-        public ImportSummary executeValidationChain( Event event, WorkContext ctx )
+        public ImportSummary executeValidationChain( final Event event, final WorkContext ctx )
         {
-            for ( Class<? extends ValidationCheck> validator : validators )
+            for ( final Class<? extends ValidationCheck> validator : validators )
             {
                 try
                 {
-                    ValidationCheck validationCheck = validator.newInstance();
-                    ImportSummary importSummary = validationCheck.check( new ImmutableEvent( event ), ctx );
+                    final ValidationCheck validationCheck = validator.newInstance();
+                    final ImportSummary importSummary = validationCheck.check( new ImmutableEvent( event ), ctx );
 
                     if ( importSummary.isStatus( ImportStatus.ERROR ) )
                     {
