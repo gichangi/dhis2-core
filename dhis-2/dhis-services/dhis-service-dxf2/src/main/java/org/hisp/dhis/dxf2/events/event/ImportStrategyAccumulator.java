@@ -44,7 +44,6 @@ import lombok.Getter;
 @Getter
 public class ImportStrategyAccumulator
 {
-
     private List<Event> create = new ArrayList<>();
 
     private List<Event> update = new ArrayList<>();
