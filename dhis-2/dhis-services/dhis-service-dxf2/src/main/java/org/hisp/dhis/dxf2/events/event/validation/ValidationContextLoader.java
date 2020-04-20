@@ -73,6 +73,7 @@ import org.hisp.dhis.program.ProgramType;
 import org.hisp.dhis.programrule.ProgramRuleVariableService;
 import org.hisp.dhis.trackedentity.TrackedEntityInstance;
 import org.hisp.dhis.trackedentity.TrackerAccessManager;
+import org.hisp.dhis.user.CurrentUserService;
 import org.hisp.dhis.user.User;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
@@ -105,6 +106,8 @@ public class ValidationContextLoader
 
     private final ApplicationEventPublisher applicationEventPublisher;
 
+    private final CurrentUserService currentUserService;
+
     private final static String PROGRAM_CACHE_KEY = "0";
 
     Cache<String,Map<String, Program>> programsCache = new Cache2kBuilder<String, Map<String, Program>>() {}
@@ -116,12 +119,14 @@ public class ValidationContextLoader
 
     public ValidationContextLoader( @Qualifier( "readOnlyJdbcTemplate" ) JdbcTemplate jdbcTemplate,
         ProgramInstanceStore programInstanceStore, TrackerAccessManager trackerAccessManager,
+        CurrentUserService currentUserService,
         AttributeOptionComboLoader attributeOptionComboLoader, IdentifiableObjectManager manager,
         ProgramRuleVariableService programRuleVariableService, ApplicationEventPublisher applicationEventPublisher )
     {
         checkNotNull( jdbcTemplate );
         checkNotNull( programInstanceStore );
         checkNotNull( trackerAccessManager );
+        checkNotNull( currentUserService );
         checkNotNull( attributeOptionComboLoader );
         checkNotNull( manager );
         checkNotNull( programRuleVariableService );
@@ -134,6 +139,7 @@ public class ValidationContextLoader
         this.attributeOptionComboLoader = attributeOptionComboLoader;
         this.programRuleVariableService = programRuleVariableService;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.currentUserService = currentUserService;
     }
 
     public WorkContext load( ImportOptions importOptions, List<Event> events )
@@ -164,6 +170,7 @@ public class ValidationContextLoader
             .trackerAccessManager( this.trackerAccessManager )
             .applicationEventPublisher( this.applicationEventPublisher )
             .programRuleVariableService( this.programRuleVariableService )
+            .currentUserService( this.currentUserService )
             .build();
         // @formatter:on
     }

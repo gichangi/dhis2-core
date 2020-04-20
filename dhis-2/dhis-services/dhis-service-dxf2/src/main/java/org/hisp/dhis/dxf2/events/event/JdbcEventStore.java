@@ -43,14 +43,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
@@ -88,6 +81,7 @@ import org.hisp.dhis.util.ObjectUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 import org.springframework.jdbc.support.rowset.SqlRowSet;
 import org.springframework.stereotype.Repository;
 
@@ -345,72 +339,104 @@ public class JdbcEventStore
         return events;
     }
 
-    private void saveNotes( List<ProgramStageInstance> events ) {
-
-        final String INSERT_NOTE = "INSERT INTO TRACKEDENTITYCOMMENT (" +
-                "trackedentitycommentid, " +    // 0
-                "uid, " +                       // 1
-                "code, " +                      // 2
-                "created, " +                   // 3
-                "lastupdated, " +               // 4
-                "lastupdatedby, " +             // 5
-                "commenttext, " +               // 6
-                "creator " +                    // 7
-                "values ( nextval('programstageinstance_sequence'), ?, ?, ?, ?, ?, ?, ?)";
-
-        final String INSERT_PSI_LINK = "INSERT INTO programstageinstancecomments (" +
-                "programstageinstanceid, " +
-                "sort_order, " +
-                "trackedentitycommentid " +
-                "values (?, ? ?)";
-
-
-
-    }
-
     public void saveEvents( List<ProgramStageInstance> events ) {
 
         try {
-
-            Connection connection = jdbcTemplate.getDataSource().getConnection();
-
-            PreparedStatement insertEventPS = connection.prepareStatement(INSERT_EVENT_SQL, Statement.RETURN_GENERATED_KEYS);
-            PreparedStatement insertEventNotePS = connection.prepareStatement(INSERT_EVENT_NOTE_SQL, Statement.RETURN_GENERATED_KEYS);
-
             /*
              * - INSERT program stage instances
              */
             for ( int i = 0; i < events.size(); i += BATCH_SIZE )
             {
                 final List<ProgramStageInstance> batchList = events.subList( i,
-                Math.min( i + BATCH_SIZE, events.size() ) );
+                    Math.min( i + BATCH_SIZE, events.size() ) );
 
-                for ( ProgramStageInstance psi : batchList )
-                {
-                    bindEventParams( insertEventPS, psi );
-                    insertEventPS.addBatch();
-                }
-                insertEventPS.executeBatch();
-
-                List<Integer> eventIds = new ArrayList<>( collectPrimaryKeys( insertEventPS ) );
+                saveEventsBatch( batchList );
 
                 /*
-                 * - INSERT notes
+                 * - INSERT All NOTES
                  */
-                for ( ProgramStageInstance psi : batchList )
-                {
-                    for ( TrackedEntityComment comment : psi.getComments() )
-                    {
-                        bindEventNoteParams( insertEventNotePS, comment );
-                        insertEventNotePS.addBatch();
-                    }
-
-                }
-                insertEventNotePS.executeBatch();
+                saveAllComments( batchList );
             }
 
         } catch (SQLException throwables) {
-            throwables.printStackTrace();
+            throwables.printStackTrace(); // FIXME luciano
+        }
+    }
+
+    /**
+     * Saves the list of {@see ProgramStageInstance} using batch insert
+     *
+     * 
+     * @param batchList the list of {@see ProgramStageInstance}
+     * 
+     * @throws SQLException when an error occurs
+     */
+    private void saveEventsBatch( List<ProgramStageInstance> batchList )
+        throws SQLException
+    {
+        PreparedStatement insertEventPS = jdbcTemplate.getDataSource().getConnection()
+            .prepareStatement( INSERT_EVENT_SQL, Statement.RETURN_GENERATED_KEYS );
+
+        for ( ProgramStageInstance psi : batchList )
+        {
+            bindEventParams( insertEventPS, psi );
+            insertEventPS.addBatch();
+        }
+        insertEventPS.executeBatch();
+
+        /*
+          Assign the generated primary keys to the object
+         */
+        List<Integer> eventIds = new ArrayList<>( collectPrimaryKeys( insertEventPS ) );
+        
+        if ( eventIds.size() != batchList.size() )
+        {
+            throw new SQLException("Error"); // FIXME Luciano: is this acceptable??
+        }
+        // TODO
+        // Alternatively execute "SELECT programstageinstanceid, uid from programstageinstance"
+        // need to check which is faster
+        
+        for ( int i = 0; i < batchList.size(); i++ )
+        {
+            batchList.get( i ).setId( eventIds.get( i ) );
+        }
+    }
+
+    private void saveAllComments( List<ProgramStageInstance> batchList )
+        throws SQLException
+    {
+        Connection connection = Objects.requireNonNull( jdbcTemplate.getDataSource() ).getConnection();
+
+        PreparedStatement insertEventNotePS = connection.prepareStatement( INSERT_EVENT_NOTE_SQL,
+                Statement.RETURN_GENERATED_KEYS );
+
+        PreparedStatement insertEventNoteLinkPS = connection.prepareStatement( INSERT_EVENT_COMMENT_LINK );
+
+        for ( ProgramStageInstance psi : batchList )
+        {
+            List<TrackedEntityComment> comments = psi.getComments();
+            for ( TrackedEntityComment comment : comments )
+            {
+                // SAVE THE COMMENTS
+                bindEventNoteParams( insertEventNotePS, comment);
+                insertEventNotePS.executeUpdate();
+
+                final ResultSet generatedKeys = insertEventNotePS.getGeneratedKeys();
+
+                // SAVE THE LINK BETWEEN COMMENT AND PSI
+                if ( generatedKeys != null && generatedKeys.next() )
+                {
+                    insertEventNoteLinkPS.setLong( 1, psi.getId() );
+                    insertEventNoteLinkPS.setInt( 2, 0 );
+                    insertEventNoteLinkPS.setLong( 3, generatedKeys.getInt( 1 ) );
+
+                    insertEventNoteLinkPS.executeUpdate();
+
+                } else {
+                    // TODO luciano: shall we throw an exception?
+                }
+            }
         }
     }
 
@@ -418,8 +444,9 @@ public class JdbcEventStore
     {
         ps.setString(1, comment.getUid() );
         ps.setString(2, comment.getCommentText() );
-        ps.setString(3, comment.getCreator() );
-        ps.setTimestamp(4, toTimestamp( comment.getCreated() ) );
+        ps.setTimestamp(3, toTimestamp( comment.getCreated() ) );
+        ps.setString(4, comment.getCreator() );
+        ps.setTimestamp(5, toTimestamp ( comment.getLastUpdated() ) );
     }
 
     private List<Integer> collectPrimaryKeys( PreparedStatement ps )
@@ -466,33 +493,6 @@ public class JdbcEventStore
         {
             ps.setObject( 18, null );
         }
-    }
-
-    public void saveEvents2( List<ProgramStageInstance> events )
-    {
-        for ( int i = 0; i < events.size(); i += BATCH_SIZE )
-        {
-            final List<ProgramStageInstance> batchList = events.subList( i,
-                Math.min( i + BATCH_SIZE, events.size() ) );
-
-            jdbcTemplate.batchUpdate( INSERT_EVENT_SQL, new BatchPreparedStatementSetter()
-            {
-                @Override
-                public void setValues( PreparedStatement ps, int j )
-                    throws SQLException
-                {
-                    ProgramStageInstance event = batchList.get( j );
-                    bindEventParams( ps, event);
-                }
-
-                @Override
-                public int getBatchSize()
-                {
-                    return batchList.size();
-                }
-            } );
-        }
-
     }
 
     public void updateEvents( final List<ProgramStageInstance> events ) {
