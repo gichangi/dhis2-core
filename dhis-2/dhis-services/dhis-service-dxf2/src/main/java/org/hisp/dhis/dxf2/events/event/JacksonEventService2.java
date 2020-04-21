@@ -43,6 +43,7 @@ import org.hisp.dhis.dxf2.events.event.preprocess.update.PreUpdateProcessorFacto
 import org.hisp.dhis.dxf2.events.event.validation.ValidationFactory;
 import org.hisp.dhis.dxf2.events.event.validation.update.UpdateValidationFactory;
 import org.hisp.dhis.dxf2.importsummary.ImportSummaries;
+import org.hisp.dhis.importexport.ImportStrategy;
 import org.hisp.dhis.scheduling.JobConfiguration;
 import org.hisp.dhis.system.notification.Notifier;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -164,6 +165,24 @@ public class JacksonEventService2
         String input = StreamUtils.copyToString( inputStream, StandardCharsets.UTF_8 );
         List<Event> events = parseJsonEvents( input );
 
+        if ( importOptions != null && importOptions.getImportStrategy() != null )
+        {
+            final ImportStrategy importStrategy = importOptions.getImportStrategy();
+
+            if ( importStrategy.isCreate() )
+            {
+                return processEventImport( events, updateImportOptions( importOptions ), jobId );
+            }
+            else if ( importStrategy.isUpdate() )
+            {
+                return processEventImportUpdate( events, updateImportOptions( importOptions ), jobId );
+            }
+            // TODO: Add specific import in case of:
+            // importStrategy.isCreateAndUpdate()
+            // importStrategy.isDelete()
+            // importStrategy.isSync()
+        }
+        // Default is import - create, if no import strategy is defined
         return processEventImport( events, updateImportOptions( importOptions ), jobId );
     }
 

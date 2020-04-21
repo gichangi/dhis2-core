@@ -106,12 +106,14 @@ public class DefaultEventPersistenceService
         final Map<Event, ProgramStageInstance> eventProgramStageInstanceMap = convertToProgramStageInstances(
             new ProgramStageInstanceMapper( context ), events );
 
+        final List<ProgramStageInstance> programStageInstances = new ArrayList<>( eventProgramStageInstanceMap.values() );
+
         if ( isNotEmpty(events) )
         {
             // ...
             // save events and notes
             // ...
-            jdbcEventStore.saveEvents( new ArrayList<>( eventProgramStageInstanceMap.values() ) );
+            jdbcEventStore.saveEvents( programStageInstances );
 
             ImportSummary importSummary = new ImportSummary();
 
@@ -127,7 +129,7 @@ public class DefaultEventPersistenceService
             
 
         }
-        return null; // TODO
+        return programStageInstances; // TODO
 
     }
 

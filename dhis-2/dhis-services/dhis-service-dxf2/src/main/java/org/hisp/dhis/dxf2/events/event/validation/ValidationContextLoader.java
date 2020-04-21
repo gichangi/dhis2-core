@@ -47,6 +47,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import javax.annotation.PostConstruct;
+
 import org.apache.commons.lang3.StringUtils;
 import org.cache2k.Cache;
 import org.cache2k.Cache2kBuilder;
@@ -110,12 +112,15 @@ public class ValidationContextLoader
 
     private final static String PROGRAM_CACHE_KEY = "0";
 
-    Cache<String,Map<String, Program>> programsCache = new Cache2kBuilder<String, Map<String, Program>>() {}
+    Cache<String,Map<String, Program>> programsCache = null;
+
+    @PostConstruct
+    void buildProgramsCache()
+    {
+        programsCache = new Cache2kBuilder<String, Map<String, Program>>() {}
             .expireAfterWrite(30, TimeUnit.MINUTES)    // expire/refresh after 5 minutes
-            .resilienceDuration(30, TimeUnit.SECONDS) // cope with at most 30 seconds
-            .refreshAhead(true)                       // keep fresh when expiring
-            .loader(this::loadPrograms)         // auto populating function
             .build();
+    }
 
     public ValidationContextLoader( @Qualifier( "readOnlyJdbcTemplate" ) JdbcTemplate jdbcTemplate,
         ProgramInstanceStore programInstanceStore, TrackerAccessManager trackerAccessManager,
@@ -145,6 +150,11 @@ public class ValidationContextLoader
     public WorkContext load( ImportOptions importOptions, List<Event> events )
     {
         Map<String, Program> programMap = programsCache.get( PROGRAM_CACHE_KEY );
+        if ( programMap == null )
+        {
+            programMap = loadPrograms();
+            programsCache.put( PROGRAM_CACHE_KEY, programMap );
+        }
         // @formatter:off
         return WorkContext.builder()
             .importOptions( importOptions )
@@ -513,7 +523,7 @@ public class ValidationContextLoader
 
     }
 
-    private Map<String, Program> loadPrograms(String key)
+    private Map<String, Program> loadPrograms()
     {
         final String sql = "select p.programid, p.uid, p.name, p.type, c.uid as catcombo_uid, c.name as catcombo_name, " +
                 "ps.programstageid as ps_id, ps.uid as ps_uid, ps.featuretype as ps_feature_type, ps.sort_order, string_agg(ou.uid, ', ') ous\n"
@@ -575,7 +585,9 @@ public class ValidationContextLoader
         programStage.setId( rs.getLong( "ps_id" ) );
         programStage.setUid( rs.getString( "ps_uid" ) );
         programStage.setSortOrder( rs.getInt( "sort_order" ) );
-        programStage.setFeatureType( FeatureType.getTypeFromName( rs.getString( "ps_feature_type" ) ) );
+        programStage.setFeatureType( rs.getString( "ps_feature_type" ) != null
+            ? FeatureType.getTypeFromName( rs.getString( "ps_feature_type" ) )
+            : FeatureType.NONE );
 
         return programStage;
     }
