@@ -46,8 +46,8 @@ import java.util.stream.Collectors;
 
 import javax.transaction.Transactional;
 
-import com.google.common.base.Stopwatch;
 import lombok.extern.slf4j.Slf4j;
+
 import org.hisp.dhis.common.IdentifiableObjectManager;
 import org.hisp.dhis.dxf2.common.ImportOptions;
 import org.hisp.dhis.dxf2.events.event.Event;
@@ -56,12 +56,15 @@ import org.hisp.dhis.dxf2.events.event.Note;
 import org.hisp.dhis.dxf2.events.event.mapper.ProgramStageInstanceMapper;
 import org.hisp.dhis.dxf2.events.event.validation.WorkContext;
 import org.hisp.dhis.dxf2.events.eventdatavalue.EventDataValueService;
+import org.hisp.dhis.dxf2.importsummary.ImportSummaries;
 import org.hisp.dhis.dxf2.importsummary.ImportSummary;
 import org.hisp.dhis.program.ProgramStageInstance;
 import org.hisp.dhis.program.ProgramStageInstanceStore;
 import org.hisp.dhis.trackedentitycomment.TrackedEntityComment;
 import org.hisp.dhis.trackedentitycomment.TrackedEntityCommentService;
 import org.springframework.stereotype.Service;
+
+import com.google.common.base.Stopwatch;
 
 /**
  * @author Luciano Fiandesio
@@ -103,32 +106,54 @@ public class DefaultEventPersistenceService
     @Transactional
     public List<ProgramStageInstance> save( WorkContext context, List<Event> events )
     {
+        /*
+         * Convert the list of Events into a map where [key] -> Event, [value] ->
+         * Program Stage Instance. This is required because the 'eventDataValueService'
+         * expects both the original Event and the associated Program Stage Instance
+         */
         final Map<Event, ProgramStageInstance> eventProgramStageInstanceMap = convertToProgramStageInstances(
             new ProgramStageInstanceMapper( context ), events );
 
-        if ( isNotEmpty(events) )
+        if ( isNotEmpty( events ) )
         {
-            // ...
-            // save events and notes
-            // ...
-            jdbcEventStore.saveEvents( new ArrayList<>( eventProgramStageInstanceMap.values() ) );
+            /*
+             * save events and notes
+             */
+            final List<ProgramStageInstance> savedPsi = jdbcEventStore
+                .saveEvents( new ArrayList<>( eventProgramStageInstanceMap.values() ) );
 
-            ImportSummary importSummary = new ImportSummary();
+            /*
+             * Filter out from the original events list, all the PSI which were not
+             * persisted during the save
+             */
+            eventProgramStageInstanceMap.entrySet().removeIf( k -> !savedPsi.stream()
+                .map( ProgramStageInstance::getUid ).collect( Collectors.toList() ).contains( k.getValue().getUid() ) );
 
             // ...
             // process data values
             // ...
             Stopwatch stopwatch = Stopwatch.createStarted();
 
-            eventDataValueService.processDataValues( eventProgramStageInstanceMap, false, context.getImportOptions(),
-                importSummary, context.getDataElementMap() );
+            ImportSummaries importSummaries = eventDataValueService.processDataValues( eventProgramStageInstanceMap,
+                false, context.getImportOptions(), context.getDataElementMap() );
+
+            if ( importSummaries.getImportSummaries().size() > 0 )
+            {
+                rollbackOnException( importSummaries );
+            }
+
             log.debug( "Event save ::: Processing Data Value for {} PSIs took {}", eventProgramStageInstanceMap.size(),
                 stopwatch.stop().elapsed( TimeUnit.MILLISECONDS ) );
-            
 
         }
         return null; // TODO
+    }
 
+    private void rollbackOnException( ImportSummaries importSummaries )
+    {
+        this.jdbcEventStore
+            .delete( importSummaries.getImportSummaries().stream().filter( i -> !i.getConflicts().isEmpty() )
+                .map( ImportSummary::getReference ).collect( Collectors.toList() ) );
     }
 
     @Override
@@ -142,33 +167,33 @@ public class DefaultEventPersistenceService
                 new ProgramStageInstanceMapper( context ), events );
 
             // TODO: Implement the jdbcEventStore.updateEvents method
-            jdbcEventStore.updateEvents( new ArrayList<>(  eventProgramStageInstanceMap.values() ) );
+            jdbcEventStore.updateEvents( new ArrayList<>( eventProgramStageInstanceMap.values() ) );
 
             long now = System.nanoTime();
-
-            ImportSummary importSummary = new ImportSummary();
 
             // ...
             // process data values
             // ...
-            eventDataValueService.processDataValues( eventProgramStageInstanceMap, false, context.getImportOptions(), importSummary,
-                    context.getDataElementMap() );
+            eventDataValueService.processDataValues( eventProgramStageInstanceMap, false, context.getImportOptions(),
+                context.getDataElementMap() );
 
             // TODO this for loop slows down the process...
             for ( final ProgramStageInstance programStageInstance : eventProgramStageInstanceMap.values() )
             {
-//                final ImportSummary importSummary1 = new ImportSummary( programStageInstance.getUid() );
+                // final ImportSummary importSummary1 = new ImportSummary(
+                // programStageInstance.getUid() );
                 final Event event = getEvent( programStageInstance.getUid(), events );
                 final ImportOptions importOptions = context.getImportOptions();
 
                 saveTrackedEntityComment( programStageInstance, event, importOptions );
 
                 // TODO: Find how to bring this into the update transaction.
-                context.getTrackedEntityInstanceMap().values().forEach( tei -> identifiableObjectManager.update( tei, importOptions.getUser() ) );
+                context.getTrackedEntityInstanceMap().values()
+                    .forEach( tei -> identifiableObjectManager.update( tei, importOptions.getUser() ) );
             }
 
-            System.out.println( "UPDATE: Processing Data Value for " + eventProgramStageInstanceMap.size() + " PSI took : "
-                + TimeUnit.SECONDS.convert( System.nanoTime() - now, TimeUnit.NANOSECONDS ) );
+            System.out.println( "UPDATE: Processing Data Value for " + eventProgramStageInstanceMap.size()
+                + " PSI took : " + TimeUnit.SECONDS.convert( System.nanoTime() - now, TimeUnit.NANOSECONDS ) );
         }
 
         return null;
