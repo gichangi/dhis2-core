@@ -346,6 +346,9 @@ public class JdbcEventStore
         List<ProgramStageInstance> savedPsi = new ArrayList<>();
         for ( int i = 0; i < events.size(); i += BATCH_SIZE )
         {
+            /*
+             * split the event list into batches
+             */
             final List<ProgramStageInstance> batchList = events.subList( i, Math.min( i + BATCH_SIZE, events.size() ) );
 
             /*

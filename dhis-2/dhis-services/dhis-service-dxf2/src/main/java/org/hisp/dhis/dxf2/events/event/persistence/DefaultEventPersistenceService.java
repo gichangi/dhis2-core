@@ -59,7 +59,6 @@ import org.hisp.dhis.dxf2.events.eventdatavalue.EventDataValueService;
 import org.hisp.dhis.dxf2.importsummary.ImportSummaries;
 import org.hisp.dhis.dxf2.importsummary.ImportSummary;
 import org.hisp.dhis.program.ProgramStageInstance;
-import org.hisp.dhis.program.ProgramStageInstanceStore;
 import org.hisp.dhis.trackedentitycomment.TrackedEntityComment;
 import org.hisp.dhis.trackedentitycomment.TrackedEntityCommentService;
 import org.springframework.stereotype.Service;
@@ -79,25 +78,20 @@ public class DefaultEventPersistenceService
 
     private final EventDataValueService eventDataValueService;
 
-    private final ProgramStageInstanceStore programStageInstanceStore;
-
     private final IdentifiableObjectManager identifiableObjectManager;
 
     private final TrackedEntityCommentService trackedEntityCommentService;
 
     public DefaultEventPersistenceService( JdbcEventStore jdbcEventStore, EventDataValueService eventDataValueService,
-        ProgramStageInstanceStore programStageInstanceStore, IdentifiableObjectManager identifiableObjectManager,
-        TrackedEntityCommentService trackedEntityCommentService )
+        IdentifiableObjectManager identifiableObjectManager, TrackedEntityCommentService trackedEntityCommentService )
     {
         checkNotNull( jdbcEventStore );
         checkNotNull( eventDataValueService );
-        checkNotNull( programStageInstanceStore );
         checkNotNull( identifiableObjectManager );
         checkNotNull( trackedEntityCommentService );
 
         this.jdbcEventStore = jdbcEventStore;
         this.eventDataValueService = eventDataValueService;
-        this.programStageInstanceStore = programStageInstanceStore;
         this.identifiableObjectManager = identifiableObjectManager;
         this.trackedEntityCommentService = trackedEntityCommentService;
     }
@@ -129,9 +123,9 @@ public class DefaultEventPersistenceService
             eventProgramStageInstanceMap.entrySet().removeIf( k -> !savedPsi.stream()
                 .map( ProgramStageInstance::getUid ).collect( Collectors.toList() ).contains( k.getValue().getUid() ) );
 
-            // ...
-            // process data values
-            // ...
+            /*
+             * process data values
+             */
             Stopwatch stopwatch = Stopwatch.createStarted();
 
             ImportSummaries importSummaries = eventDataValueService.processDataValues( eventProgramStageInstanceMap,
