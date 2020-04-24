@@ -161,7 +161,7 @@ public abstract class AbstractEventService2
                 importOptions.getImportStrategy(), validationContext.getProgramStageInstanceMap() );
 
             importSummaries
-                .addImportSummaries( updateEvents( accumulator.getCreate(), importOptions, false, false, validationContext ) );
+                .addImportSummaries( updateEvents( accumulator.getUpdate(), importOptions, false, false, validationContext ) );
         }
 
         if ( jobId != null )
@@ -420,8 +420,8 @@ public abstract class AbstractEventService2
         ImportSummaries importSummaries = new ImportSummaries();
 
         // filter out events which are already in the database
-        // TODO: Is it needed for Update? Or something else similar?
-        List<Event> validEvents = resolveImportableEvents( events, importSummaries, ctx );
+        // TODO: Is it needed for Update? Removing for now: resolveImportableEvents( events, importSummaries, ctx );
+        List<Event> validEvents = events;
 
         // pre-process events
         preUpdateProcessorFactory.preProcessEvents( ctx, events );
@@ -438,6 +438,8 @@ public abstract class AbstractEventService2
             .filter( i -> i.isStatus( ERROR ) ).map( ImportSummary::getReference )
             .collect( Collectors.toList() );
 
+        // TODO: What if size is ZERO? Should we return error as well as nothing was actually imported?
+        // Currently it returns success.
         if ( failedUids.size() == validEvents.size() )
         {
             return importSummaries;
