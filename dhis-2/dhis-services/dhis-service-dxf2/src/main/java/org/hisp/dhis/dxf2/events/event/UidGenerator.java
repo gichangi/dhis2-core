@@ -33,6 +33,7 @@ import static org.hisp.dhis.common.CodeGenerator.isValidUid;
 
 import java.util.List;
 
+import org.apache.commons.lang3.StringUtils;
 import org.hisp.dhis.common.CodeGenerator;
 
 /**
@@ -52,9 +53,12 @@ public class UidGenerator
      */
     public List<Event> assignUidToEvents( List<Event> events )
     {
-        for ( Event event : events )
-        {
-            event.setUid( CodeGenerator.generateUid() );
+        for ( Event event : events ) {
+            if ( StringUtils.isEmpty( event.getUid() ) )
+            {
+                event.setUid( CodeGenerator.generateUid() );
+            }
+
             List<Note> notes = event.getNotes();
             for ( Note note : notes )
             {

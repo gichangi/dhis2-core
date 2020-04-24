@@ -320,7 +320,7 @@ public class ValidationContextLoader
 
     private Map<String, ProgramStageInstance> loadProgramStageInstances( List<Event> events )
     {
-        Set<String> psiUid = events.stream().map( Event::getEnrollment ).collect( Collectors.toSet() );
+        Set<String> psiUid = events.stream().map( Event::getEvent ).collect( Collectors.toSet() );
 
         final String sql = "select psi.programinstanceid, psi.uid, psi.status, psi.deleted from programstageinstance psi where psi.uid in (:ids)";
         MapSqlParameterSource parameters = new MapSqlParameterSource();
