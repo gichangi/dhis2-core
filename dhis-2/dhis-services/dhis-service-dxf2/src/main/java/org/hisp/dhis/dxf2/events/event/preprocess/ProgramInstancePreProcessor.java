@@ -33,7 +33,6 @@ import java.util.Date;
 import java.util.List;
 
 import org.hisp.dhis.common.CodeGenerator;
-import org.hisp.dhis.dxf2.common.ImportOptions;
 import org.hisp.dhis.dxf2.events.event.Event;
 import org.hisp.dhis.dxf2.events.event.validation.WorkContext;
 import org.hisp.dhis.program.Program;
@@ -54,7 +53,6 @@ public class ProgramInstancePreProcessor
     {
         // TODO can we skip this if enrollment property is not null? Can the enrollment property be set by the client?
         ProgramInstanceStore programInstanceStore = ctx.getServiceDelegator().getProgramInstanceStore();
-        ImportOptions importOptions = ctx.getImportOptions();
 
         Program program = ctx.getProgramsMap().get( event.getProgram() );
         ProgramInstance programInstance = ctx.getProgramInstanceMap().get( event.getUid() );
