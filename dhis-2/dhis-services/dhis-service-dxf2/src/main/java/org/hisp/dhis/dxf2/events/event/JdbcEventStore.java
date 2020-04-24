@@ -30,7 +30,7 @@ package org.hisp.dhis.dxf2.events.event;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.lang.Math.min;
-import static org.apache.commons.lang3.ObjectUtils.isEmpty;
+import static org.apache.commons.collections.CollectionUtils.isEmpty;
 import static org.hisp.dhis.common.IdentifiableObjectUtils.getIdentifiers;
 import static org.hisp.dhis.commons.util.TextUtils.*;
 import static org.hisp.dhis.dxf2.events.event.AbstractEventService.STATIC_EVENT_COLUMNS;
@@ -44,10 +44,17 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import lombok.extern.slf4j.Slf4j;
+import javax.sql.DataSource;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -92,9 +99,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.io.ParseException;
 import com.vividsolutions.jts.io.WKTReader;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Morten Olav Hansen <mortenoh@gmail.com>
@@ -344,27 +354,20 @@ public class JdbcEventStore
     public List<ProgramStageInstance> saveEvents( List<ProgramStageInstance> events )
     {
         List<ProgramStageInstance> savedPsi = new ArrayList<>();
-        for ( int i = 0; i < events.size(); i += BATCH_SIZE )
-        {
-            /*
-             * split the event list into batches
-             */
-            final List<ProgramStageInstance> batchList = events.subList( i, Math.min( i + BATCH_SIZE, events.size() ) );
 
-            /*
-             * Save events and events note. Since saving events takes place using a batch
-             * update, the operation is atomic, so if that method throws an exception, it is
-             * caught and we move one, since the entire batch was not saved.
-             */
+        final List<List<ProgramStageInstance>> batches = Lists.partition( events, BATCH_SIZE);
+        for (List<ProgramStageInstance> batch : batches) {
+
             try
             {
-                savedPsi.addAll( saveAllComments( saveAllEvents( batchList ) ) );
+                savedPsi.addAll( saveAllComments( saveAllEvents( batch ) ) );
             }
             catch ( SQLException sqlException )
             {
                 log.error( "An error occurred saving a list of Events", sqlException );
             }
         }
+
         return savedPsi;
     }
 
@@ -400,53 +403,56 @@ public class JdbcEventStore
     private List<ProgramStageInstance> saveAllEvents( List<ProgramStageInstance> batch )
         throws SQLException
     {
-        PreparedStatement insertEventPS = jdbcTemplate.getDataSource().getConnection()
-            .prepareStatement( INSERT_EVENT_SQL, Statement.RETURN_GENERATED_KEYS );
+        DataSource dataSource = jdbcTemplate.getDataSource();
 
-        for ( ProgramStageInstance psi : batch )
+        try (Connection connection = dataSource.getConnection();
+            PreparedStatement insertEventPS = connection.prepareStatement( INSERT_EVENT_SQL,
+                Statement.RETURN_GENERATED_KEYS ))
         {
-            bindEventParams( insertEventPS, psi );
-            insertEventPS.addBatch();
-        }
-        insertEventPS.executeBatch();
+            for ( ProgramStageInstance psi : batch )
+            {
+                bindEventParams( insertEventPS, psi );
+                insertEventPS.addBatch();
+            }
+            insertEventPS.executeBatch();
 
-        /*
-         * Assign the generated primary keys to the object
-         */
-        List<Integer> eventIds = new ArrayList<>( collectPrimaryKeys( insertEventPS ) );
+            /*
+             * Assign the generated primary keys to the object
+             */
+            List<Integer> eventIds = new ArrayList<>( collectPrimaryKeys( insertEventPS ) );
 
-        /*
-         * Assign the generated event PKs to the batch.
-         *
-         * If the generate event PKs size doesn't match the batch size, one or more PSI
-         * were not persisted. Run an additional query to fetch the persisted PSI and
-         * return only the PSI from the batch which are persisted.
-         *
-         */
-        if ( eventIds.size() != batch.size() )
-        {
-            /* a Map where [key] -> PSI UID , [value] -> PSI ID */
-            Map<String, Long> persisted = jdbcTemplate
-                .queryForList(
+            /*
+             * Assign the generated event PKs to the batch.
+             *
+             * If the generate event PKs size doesn't match the batch size, one or more PSI
+             * were not persisted. Run an additional query to fetch the persisted PSI and
+             * return only the PSI from the batch which are persisted.
+             *
+             */
+            if ( eventIds.size() != batch.size() )
+            {
+                /* a Map where [key] -> PSI UID , [value] -> PSI ID */
+                Map<String, Long> persisted = jdbcTemplate.queryForList(
                     "SELECT uid, programstageinstanceid from programstageinstance where programstageinstanceid in ( "
                         + Joiner.on( ";" ).join( eventIds ) + ")" )
-                .stream().collect(
-                    Collectors.toMap( s -> (String) s.get( "uid" ), s -> (Long) s.get( "programstageinstanceid" ) ) );
+                    .stream().collect( Collectors.toMap( s -> (String) s.get( "uid" ),
+                        s -> (Long) s.get( "programstageinstanceid" ) ) );
 
-            return batch.stream()
-            // @formatter:off
+                return batch.stream()
+                    // @formatter:off
                     .filter(psi -> persisted.containsKey(psi.getUid()))
                     .peek(psi -> psi.setId(persisted.get(psi.getUid())))
                     .collect(Collectors.toList());
-            // @formatter:on
-        }
-        else
-        {
-            for ( int i = 0; i < eventIds.size(); i++ )
-            {
-                batch.get( i ).setId( eventIds.get( i ) );
+                    // @formatter:on
             }
-            return batch;
+            else
+            {
+                for ( int i = 0; i < eventIds.size(); i++ )
+                {
+                    batch.get( i ).setId( eventIds.get( i ) );
+                }
+                return batch;
+            }
         }
     }
 
@@ -455,46 +461,42 @@ public class JdbcEventStore
     {
         List<String> failedUids = new ArrayList<>();
 
-        Connection connection = Objects.requireNonNull( jdbcTemplate.getDataSource() ).getConnection();
+        DataSource dataSource = jdbcTemplate.getDataSource();
 
-        PreparedStatement insertEventNotePS = connection.prepareStatement( INSERT_EVENT_NOTE_SQL,
-            Statement.RETURN_GENERATED_KEYS );
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement insertEventNotePS = connection.prepareStatement(INSERT_EVENT_NOTE_SQL,
+                Statement.RETURN_GENERATED_KEYS); PreparedStatement insertEventNoteLinkPS = connection.prepareStatement(INSERT_EVENT_COMMENT_LINK)) {
+            
+            for (ProgramStageInstance psi : batch) {
+                List<TrackedEntityComment> comments = psi.getComments();
+                if (comments.size() != 0) {
+                    try {
+                        for (TrackedEntityComment comment : comments) {
+                            // SAVE THE COMMENTS
+                            bindEventNoteParams(insertEventNotePS, comment);
+                            insertEventNotePS.execute();
 
-        PreparedStatement insertEventNoteLinkPS = connection.prepareStatement( INSERT_EVENT_COMMENT_LINK );
+                            final ResultSet generatedKeys = insertEventNotePS.getGeneratedKeys();
 
-        for ( ProgramStageInstance psi : batch )
-        {
-            List<TrackedEntityComment> comments = psi.getComments();
+                            // SAVE THE LINK BETWEEN COMMENT AND PSI
+                            if ( generatedKeys != null && generatedKeys.next() )
+                            {
+                                insertEventNoteLinkPS.setLong( 1, psi.getId() );
+                                insertEventNoteLinkPS.setInt( 2, 0 );
+                                insertEventNoteLinkPS.setLong( 3, generatedKeys.getInt( 1 ) );
 
-            try
-            {
-                for ( TrackedEntityComment comment : comments )
-                {
-                    // SAVE THE COMMENTS
-                    bindEventNoteParams( insertEventNotePS, comment );
-                    insertEventNotePS.executeUpdate();
-
-                    final ResultSet generatedKeys = insertEventNotePS.getGeneratedKeys();
-
-                    // SAVE THE LINK BETWEEN COMMENT AND PSI
-                    if ( generatedKeys != null && generatedKeys.next() )
-                    {
-                        insertEventNoteLinkPS.setLong( 1, psi.getId() );
-                        insertEventNoteLinkPS.setInt( 2, 0 );
-                        insertEventNoteLinkPS.setLong( 3, generatedKeys.getInt( 1 ) );
-
-                        insertEventNoteLinkPS.executeUpdate();
-                    }
-                    else
-                    {
-                        failedUids.add( psi.getUid() );
+                                insertEventNoteLinkPS.execute();
+                            }
+                            else
+                            {
+                                failedUids.add( psi.getUid() );
+                            }
+                        }
+                    } catch (SQLException sqlException) {
+                        log.error("An error occurred persisting a comment for PSI with uid: " + psi.getUid());
+                        failedUids.add(psi.getUid());
                     }
                 }
-            }
-            catch ( SQLException sqlException )
-            {
-                log.error( "An error occurred persisting a comment for PSI with uid: " + psi.getUid() );
-                failedUids.add( psi.getUid() );
             }
         }
 
